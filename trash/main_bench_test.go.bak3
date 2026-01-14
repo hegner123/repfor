@@ -1,0 +1,564 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// Benchmark test helpers
+
+func setupTestDirBench(b *testing.B) string {
+	tmpDir, err := os.MkdirTemp("", "repfor-bench-*")
+	if err != nil {
+		b.Fatalf("Failed to create temp dir: %v", err)
+	}
+	return tmpDir
+}
+
+func cleanupTestDirBench(b *testing.B, dir string) {
+	if err := os.RemoveAll(dir); err != nil {
+		b.Errorf("Failed to cleanup temp dir: %v", err)
+	}
+}
+
+func createTestFileBench(b *testing.B, dir, name, content string) string {
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		b.Fatalf("Failed to create test file: %v", err)
+	}
+	return path
+}
+
+// Performance Benchmarks
+
+// Basic Function Benchmarks
+
+func BenchmarkReplaceInLine(b *testing.B) {
+	line := "hello world test example hello"
+	search := "hello"
+	replace := "hi"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replaceInLine(line, search, replace, false, false)
+	}
+}
+
+func BenchmarkReplaceInLine_LongLine(b *testing.B) {
+	line := strings.Repeat("test ", 10000)
+	search := "test"
+	replace := "exam"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replaceInLine(line, search, replace, false, false)
+	}
+}
+
+func BenchmarkReplaceInLine_ManyMatches(b *testing.B) {
+	line := strings.Repeat("x", 10000)
+	search := "x"
+	replace := "y"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replaceInLine(line, search, replace, false, false)
+	}
+}
+
+func BenchmarkReplaceInLine_NoMatches(b *testing.B) {
+	line := strings.Repeat("abcdefghij", 1000)
+	search := "xyz"
+	replace := "123"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replaceInLine(line, search, replace, false, false)
+	}
+}
+
+func BenchmarkReplaceInLine_CaseInsensitive(b *testing.B) {
+	line := "Hello HELLO hello HeLLo " + strings.Repeat("world ", 1000)
+	search := "hello"
+	replace := "hi"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replaceInLine(line, search, replace, true, false)
+	}
+}
+
+func BenchmarkReplaceInLine_WholeWord(b *testing.B) {
+	line := "log logger log logging " + strings.Repeat("log ", 1000)
+	search := "log"
+	replace := "trace"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replaceInLine(line, search, replace, false, true)
+	}
+}
+
+func BenchmarkReplaceInLine_CaseInsensitiveWholeWord(b *testing.B) {
+	line := "Log logger LOG logging " + strings.Repeat("log ", 1000)
+	search := "log"
+	replace := "trace"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replaceInLine(line, search, replace, true, true)
+	}
+}
+
+// Unicode Benchmarks
+
+func BenchmarkReplaceInLine_Unicode(b *testing.B) {
+	line := strings.Repeat("hello 世界 ", 1000)
+	search := "世界"
+	replace := "world"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replaceInLine(line, search, replace, false, false)
+	}
+}
+
+func BenchmarkReplaceInLine_Emoji(b *testing.B) {
+	line := strings.Repeat("hello 👋 ", 1000)
+	search := "👋"
+	replace := "🌍"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replaceInLine(line, search, replace, false, false)
+	}
+}
+
+// Helper Function Benchmarks
+
+func BenchmarkContainsWholeWord(b *testing.B) {
+	text := "the quick brown fox jumps over the lazy dog"
+	word := "fox"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = containsWholeWord(text, word)
+	}
+}
+
+func BenchmarkContainsWholeWord_NotFound(b *testing.B) {
+	text := "the quick brown fox jumps over the lazy dog"
+	word := "cat"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = containsWholeWord(text, word)
+	}
+}
+
+func BenchmarkContainsWholeWord_LongText(b *testing.B) {
+	text := strings.Repeat("word1 word2 word3 word4 ", 1000)
+	word := "word3"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = containsWholeWord(text, word)
+	}
+}
+
+func BenchmarkIsWordChar(b *testing.B) {
+	chars := []rune{'a', 'Z', '0', '_', ' ', '!', '世'}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, ch := range chars {
+			_ = isWordChar(ch)
+		}
+	}
+}
+
+func BenchmarkCaseInsensitiveReplace(b *testing.B) {
+	line := "Hello World HELLO world hello WORLD"
+	search := "hello"
+	replace := "hi"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = caseInsensitiveReplace(line, search, replace)
+	}
+}
+
+func BenchmarkCaseInsensitiveReplace_Long(b *testing.B) {
+	line := strings.Repeat("Hello World ", 5000)
+	search := "hello"
+	replace := "hi"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = caseInsensitiveReplace(line, search, replace)
+	}
+}
+
+func BenchmarkWholeWordReplace(b *testing.B) {
+	line := "log logger log logging log"
+	search := "log"
+	replace := "trace"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = wholeWordReplace(line, search, replace)
+	}
+}
+
+func BenchmarkWholeWordReplace_Long(b *testing.B) {
+	line := strings.Repeat("log logger logging ", 1000)
+	search := "log"
+	replace := "trace"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = wholeWordReplace(line, search, replace)
+	}
+}
+
+func BenchmarkCountReplacements(b *testing.B) {
+	line := strings.Repeat("test ", 10000)
+	search := "test"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = countReplacements(line, search, false, false)
+	}
+}
+
+func BenchmarkCountReplacements_WholeWord(b *testing.B) {
+	line := strings.Repeat("log logger ", 5000)
+	search := "log"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = countReplacements(line, search, false, true)
+	}
+}
+
+// File Operation Benchmarks
+
+func BenchmarkReplaceInFile_SmallFile(b *testing.B) {
+	tmpDir := setupTestDirBench(b)
+	defer cleanupTestDirBench(b, tmpDir)
+
+	content := strings.Repeat("target line\n", 100)
+	filePath := createTestFile(b, tmpDir, "small.txt", content)
+
+	config := Config{
+		Search:  "target",
+		Replace: "REPLACED",
+		DryRun:  false,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = replaceInFile(filePath, config)
+	}
+}
+
+func BenchmarkReplaceInFile_MediumFile(b *testing.B) {
+	tmpDir := setupTestDirBench(b)
+	defer cleanupTestDirBench(b, tmpDir)
+
+	content := strings.Repeat("target line\n", 10000)
+	filePath := createTestFile(b, tmpDir, "medium.txt", content)
+
+	config := Config{
+		Search:  "target",
+		Replace: "REPLACED",
+		DryRun:  false,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = replaceInFile(filePath, config)
+	}
+}
+
+func BenchmarkReplaceInFile_LargeFile(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping large file benchmark in short mode")
+	}
+
+	tmpDir := setupTestDirBench(b)
+	defer cleanupTestDirBench(b, tmpDir)
+
+	content := strings.Repeat("target line\n", 100000)
+	filePath := createTestFile(b, tmpDir, "large.txt", content)
+
+	config := Config{
+		Search:  "target",
+		Replace: "REPLACED",
+		DryRun:  false,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = replaceInFile(filePath, config)
+	}
+}
+
+func BenchmarkReplaceInFile_DryRun(b *testing.B) {
+	tmpDir := setupTestDirBench(b)
+	defer cleanupTestDirBench(b, tmpDir)
+
+	content := strings.Repeat("target line\n", 10000)
+	filePath := createTestFile(b, tmpDir, "dryrun.txt", content)
+
+	config := Config{
+		Search:  "target",
+		Replace: "REPLACED",
+		DryRun:  true,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = replaceInFile(filePath, config)
+	}
+}
+
+func BenchmarkReplaceInFile_WithExclude(b *testing.B) {
+	tmpDir := setupTestDirBench(b)
+	defer cleanupTestDirBench(b, tmpDir)
+
+	content := "result = test\ndirResult = test\n" + strings.Repeat("result = value\n", 1000)
+	filePath := createTestFile(b, tmpDir, "exclude.txt", content)
+
+	config := Config{
+		Search:  "result",
+		Replace: "res",
+		Exclude: []string{"dirResult"},
+		DryRun:  false,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = replaceInFile(filePath, config)
+	}
+}
+
+// Directory Operation Benchmarks
+
+func BenchmarkReplaceInDirectory_SmallDir(b *testing.B) {
+	tmpDir := setupTestDirBench(b)
+	defer cleanupTestDirBench(b, tmpDir)
+
+	for i := 0; i < 10; i++ {
+		content := "target content\n"
+		createTestFile(b, tmpDir, fmt.Sprintf("file%03d.txt", i), content)
+	}
+
+	config := Config{
+		Search:  "target",
+		Replace: "REPLACED",
+		DryRun:  false,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = replaceInDirectory(tmpDir, config)
+	}
+}
+
+func BenchmarkReplaceInDirectory_ManyFiles(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping many files benchmark in short mode")
+	}
+
+	tmpDir := setupTestDirBench(b)
+	defer cleanupTestDirBench(b, tmpDir)
+
+	for i := 0; i < 100; i++ {
+		content := "target content\n"
+		createTestFile(b, tmpDir, fmt.Sprintf("file%03d.txt", i), content)
+	}
+
+	config := Config{
+		Search:  "target",
+		Replace: "REPLACED",
+		DryRun:  false,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = replaceInDirectory(tmpDir, config)
+	}
+}
+
+func BenchmarkReplaceInDirectory_WithFilter(b *testing.B) {
+	tmpDir := setupTestDirBench(b)
+	defer cleanupTestDirBench(b, tmpDir)
+
+	for i := 0; i < 50; i++ {
+		content := "target content\n"
+		createTestFile(b, tmpDir, fmt.Sprintf("file%03d.txt", i), content)
+		createTestFile(b, tmpDir, fmt.Sprintf("file%03d.go", i), content)
+	}
+
+	config := Config{
+		Search:  "target",
+		Replace: "REPLACED",
+		Ext:     ".txt",
+		DryRun:  false,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = replaceInDirectory(tmpDir, config)
+	}
+}
+
+// Write File Benchmarks
+
+func BenchmarkWriteFile_SmallFile(b *testing.B) {
+	tmpDir := setupTestDirBench(b)
+	defer cleanupTestDirBench(b, tmpDir)
+
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("Line %d", i)
+	}
+
+	filePath := tmpDir + "/benchmark.txt"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = writeFile(filePath, lines)
+	}
+}
+
+func BenchmarkWriteFile_LargeFile(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping large file benchmark in short mode")
+	}
+
+	tmpDir := setupTestDirBench(b)
+	defer cleanupTestDirBench(b, tmpDir)
+
+	lines := make([]string, 10000)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("Line %d with some content", i)
+	}
+
+	filePath := tmpDir + "/benchmark.txt"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = writeFile(filePath, lines)
+	}
+}
+
+// Comparison Benchmarks
+
+func BenchmarkReplaceComparison(b *testing.B) {
+	line := strings.Repeat("test ", 5000)
+	search := "test"
+	replace := "exam"
+
+	b.Run("Standard", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = replaceInLine(line, search, replace, false, false)
+		}
+	})
+
+	b.Run("CaseInsensitive", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = replaceInLine(line, search, replace, true, false)
+		}
+	})
+
+	b.Run("WholeWord", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = replaceInLine(line, search, replace, false, true)
+		}
+	})
+
+	b.Run("Both", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = replaceInLine(line, search, replace, true, true)
+		}
+	})
+}
+
+// Memory Allocation Benchmarks
+
+func BenchmarkReplaceInLine_Allocs(b *testing.B) {
+	line := "hello world test example"
+	search := "test"
+	replace := "exam"
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replaceInLine(line, search, replace, false, false)
+	}
+}
+
+func BenchmarkCaseInsensitiveReplace_Allocs(b *testing.B) {
+	line := "Hello World Test Example"
+	search := "test"
+	replace := "exam"
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = caseInsensitiveReplace(line, search, replace)
+	}
+}
+
+func BenchmarkWholeWordReplace_Allocs(b *testing.B) {
+	line := "log logger log logging"
+	search := "log"
+	replace := "trace"
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = wholeWordReplace(line, search, replace)
+	}
+}
+
+// Scalability Benchmarks
+
+func BenchmarkScalability_LineLength(b *testing.B) {
+	sizes := []int{100, 1000, 10000, 100000}
+
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("size_%d", size), func(b *testing.B) {
+			line := strings.Repeat("test ", size/5)
+			search := "test"
+			replace := "exam"
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_ = replaceInLine(line, search, replace, false, false)
+			}
+		})
+	}
+}
+
+func BenchmarkScalability_NumMatches(b *testing.B) {
+	numMatches := []int{1, 10, 100, 1000}
+
+	for _, num := range numMatches {
+		b.Run(fmt.Sprintf("matches_%d", num), func(b *testing.B) {
+			line := strings.Repeat("test ", num) + strings.Repeat("other ", 1000)
+			search := "test"
+			replace := "exam"
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_ = replaceInLine(line, search, replace, false, false)
+			}
+		})
+	}
+}
