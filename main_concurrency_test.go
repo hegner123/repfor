@@ -25,7 +25,7 @@ func TestReplaceInFile_Concurrent(t *testing.T) {
 	numFiles := 100
 	filePaths := make([]string, numFiles)
 	for i := 0; i < numFiles; i++ {
-		content := fmt.Sprintf("Line 1 contains target\nLine 2 has target\nLine 3 target here\n")
+		content := "Line 1 contains target\nLine 2 has target\nLine 3 target here\n"
 		filePaths[i] = createTestFile(t, tmpDir, fmt.Sprintf("file%03d.txt", i), content)
 	}
 
@@ -135,7 +135,9 @@ func TestReplaceInDirectories_ParallelDirectories(t *testing.T) {
 	dirs := make([]string, numDirs)
 	for i := 0; i < numDirs; i++ {
 		dir := filepath.Join(tmpDir, fmt.Sprintf("dir%03d", i))
-		os.Mkdir(dir, 0755)
+		if err := os.Mkdir(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
 		dirs[i] = dir
 
 		// Create files in each directory
@@ -537,7 +539,9 @@ func TestReplaceInDirectories_ConcurrentDirs(t *testing.T) {
 	dirs := make([]string, numDirs)
 	for i := 0; i < numDirs; i++ {
 		dir := filepath.Join(tmpDir, fmt.Sprintf("dir%02d", i))
-		os.Mkdir(dir, 0755)
+		if err := os.Mkdir(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
 		dirs[i] = dir
 
 		for j := 0; j < 50; j++ {

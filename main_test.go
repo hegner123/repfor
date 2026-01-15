@@ -423,8 +423,12 @@ func TestReplaceInDirectories_MultiDir(t *testing.T) {
 
 	dir1 := filepath.Join(tmpDir, "dir1")
 	dir2 := filepath.Join(tmpDir, "dir2")
-	os.Mkdir(dir1, 0755)
-	os.Mkdir(dir2, 0755)
+	if err := os.Mkdir(dir1, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(dir2, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	createTestFile(t, dir1, "test1.txt", "hello world\n")
 	createTestFile(t, dir2, "test2.txt", "hello again\n")

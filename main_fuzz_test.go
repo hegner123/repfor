@@ -200,12 +200,12 @@ func TestReplaceInLine_RandomInputs(t *testing.T) {
 		t.Skip("Skipping randomized test in short mode")
 	}
 
-	rand.Seed(42) // Deterministic randomness
+	r := rand.New(rand.NewSource(42)) // Deterministic randomness
 
 	for i := 0; i < 1000; i++ {
-		line := randomString(rand.Intn(1000))
-		search := randomString(rand.Intn(50))
-		replace := randomString(rand.Intn(50))
+		line := randomString(r.Intn(1000))
+		search := randomString(r.Intn(50))
+		replace := randomString(r.Intn(50))
 
 		// Should not panic
 		func() {
@@ -235,11 +235,11 @@ func TestContainsWholeWord_RandomInputs(t *testing.T) {
 		t.Skip("Skipping randomized test in short mode")
 	}
 
-	rand.Seed(42)
+	r := rand.New(rand.NewSource(42))
 
 	for i := 0; i < 1000; i++ {
-		text := randomString(rand.Intn(500))
-		word := randomString(rand.Intn(50))
+		text := randomString(r.Intn(500))
+		word := randomString(r.Intn(50))
 
 		func() {
 			defer func() {
@@ -269,12 +269,12 @@ func TestWholeWordReplace_RandomInputs(t *testing.T) {
 		t.Skip("Skipping randomized test in short mode")
 	}
 
-	rand.Seed(42)
+	r := rand.New(rand.NewSource(42))
 
 	for i := 0; i < 500; i++ {
-		line := randomString(rand.Intn(500))
-		search := randomString(rand.Intn(30))
-		replace := randomString(rand.Intn(30))
+		line := randomString(r.Intn(500))
+		search := randomString(r.Intn(30))
+		replace := randomString(r.Intn(30))
 
 		func() {
 			defer func() {
@@ -300,11 +300,11 @@ func TestCountReplacements_RandomInputs(t *testing.T) {
 		t.Skip("Skipping randomized test in short mode")
 	}
 
-	rand.Seed(42)
+	r := rand.New(rand.NewSource(42))
 
 	for i := 0; i < 1000; i++ {
-		line := randomString(rand.Intn(500))
-		search := randomString(rand.Intn(30))
+		line := randomString(r.Intn(500))
+		search := randomString(r.Intn(30))
 
 		func() {
 			defer func() {

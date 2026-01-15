@@ -1,3 +1,5 @@
+//go:build ignore
+
 package pkg2
 
 import (

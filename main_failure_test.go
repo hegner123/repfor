@@ -36,7 +36,7 @@ func TestReplaceInFile_ReadOnlyFile(t *testing.T) {
 	if err := os.Chmod(filePath, 0444); err != nil {
 		t.Fatalf("Failed to chmod: %v", err)
 	}
-	defer os.Chmod(filePath, 0644) // Restore permissions for cleanup
+	defer func() { _ = os.Chmod(filePath, 0644) }() // Restore permissions for cleanup
 
 	config := Config{
 		Search:  "target",
@@ -61,7 +61,7 @@ func TestReplaceInFile_DryRunReadOnly(t *testing.T) {
 	if err := os.Chmod(filePath, 0444); err != nil {
 		t.Fatalf("Failed to chmod: %v", err)
 	}
-	defer os.Chmod(filePath, 0644)
+	defer func() { _ = os.Chmod(filePath, 0644) }()
 
 	config := Config{
 		Search:  "target",
@@ -152,7 +152,7 @@ func TestReplaceInDirectory_NoReadPermission(t *testing.T) {
 	if err := os.Chmod(subDir, 0000); err != nil {
 		t.Fatalf("Failed to chmod: %v", err)
 	}
-	defer os.Chmod(subDir, 0755) // Restore for cleanup
+	defer func() { _ = os.Chmod(subDir, 0755) }() // Restore for cleanup
 
 	config := Config{
 		Search:  "test",
@@ -226,7 +226,7 @@ func TestReplaceInFile_ConcurrentModification(t *testing.T) {
 	// This is a race condition we want to detect
 	go func() {
 		// Modify file after a brief delay
-		os.WriteFile(filePath, []byte("modified content\n"), 0644)
+		_ = os.WriteFile(filePath, []byte("modified content\n"), 0644)
 	}()
 
 	// Try to replace
@@ -285,7 +285,9 @@ func TestReplaceInDirectory_SkipsSubdirectories(t *testing.T) {
 	// Create files and subdirectory
 	createTestFile(t, tmpDir, "file1.txt", "target\n")
 	subDir := filepath.Join(tmpDir, "subdir")
-	os.Mkdir(subDir, 0755)
+	if err := os.Mkdir(subDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 	createTestFile(t, subDir, "file2.txt", "target\n")
 
 	config := Config{
@@ -422,8 +424,10 @@ func TestReplaceInDirectory_PartialFailure(t *testing.T) {
 
 	badPath := filepath.Join(tmpDir, "bad.txt")
 	createTestFile(t, tmpDir, "bad.txt", "target\n")
-	os.Chmod(badPath, 0000)
-	defer os.Chmod(badPath, 0644)
+	if err := os.Chmod(badPath, 0000); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(badPath, 0644) }()
 
 	config := Config{
 		Search:  "target",
@@ -449,7 +453,9 @@ func TestReplaceInDirectories_MixedValidInvalid(t *testing.T) {
 	defer cleanupTestDir(t, tmpDir)
 
 	validDir := filepath.Join(tmpDir, "valid")
-	os.Mkdir(validDir, 0755)
+	if err := os.Mkdir(validDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 	createTestFile(t, validDir, "test.txt", "target\n")
 
 	config := Config{

@@ -1,17 +1,14 @@
-linters:
-  enable:
-    - gofmt
-    - govet
-    - errcheck
-    - staticcheck
-    - unused
-    - gosimple
-    - ineffassign
-    - typecheck
+version: 2
 
 linters-settings:
   errcheck:
     check-blank: true
+
+linters:
+  exclusions:
+    paths:
+      - "test_files/"
+      - "trash/"
 
 issues:
   exclude-use-default: false
