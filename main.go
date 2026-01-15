@@ -11,17 +11,17 @@ import (
 )
 
 type FileModification struct {
-	Path          string `json:"path"`
-	LinesChanged  int    `json:"lines_changed"`
-	Replacements  int    `json:"replacements"`
+	Path         string `json:"path"`
+	LinesChanged int    `json:"lines_changed"`
+	Replacements int    `json:"replacements"`
 }
 
 type DirectoryResult struct {
-	Dir            string             `json:"dir"`
-	FilesModified  int                `json:"files_modified"`
-	LinesChanged   int                `json:"lines_changed"`
-	TotalReplacements int             `json:"total_replacements"`
-	Files          []FileModification `json:"files"`
+	Dir               string             `json:"dir"`
+	FilesModified     int                `json:"files_modified"`
+	LinesChanged      int                `json:"lines_changed"`
+	TotalReplacements int                `json:"total_replacements"`
+	Files             []FileModification `json:"files"`
 }
 
 type Result struct {
