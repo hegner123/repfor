@@ -25,6 +25,7 @@ type DirectoryResult struct {
 }
 
 type Result struct {
+	Summary     string            `json:"summary"`
 	Directories []DirectoryResult `json:"directories"`
 	DryRun      bool              `json:"dry_run,omitempty"`
 }
@@ -429,6 +430,56 @@ func replaceInDirectories(config Config) (*Result, error) {
 
 		result.Directories = append(result.Directories, *dirResult)
 	}
+
+	// Generate summary
+	totalFiles := 0
+	totalLines := 0
+	totalReplacements := 0
+	dirsWithChanges := 0
+
+	for _, dirResult := range result.Directories {
+		totalFiles += dirResult.FilesModified
+		totalLines += dirResult.LinesChanged
+		totalReplacements += dirResult.TotalReplacements
+		if dirResult.FilesModified > 0 {
+			dirsWithChanges++
+		}
+	}
+
+	// Build summary string
+	var action string
+	if config.DryRun {
+		action = "Would modify"
+	} else {
+		action = "Modified"
+	}
+
+	fileWord := "file"
+	if totalFiles != 1 {
+		fileWord = "files"
+	}
+
+	lineWord := "line"
+	if totalLines != 1 {
+		lineWord = "lines"
+	}
+
+	replacementWord := "replacement"
+	if totalReplacements != 1 {
+		replacementWord = "replacements"
+	}
+
+	var dirInfo string
+	if len(config.Dirs) > 1 {
+		dirWord := "directory"
+		if dirsWithChanges != 1 {
+			dirWord = "directories"
+		}
+		dirInfo = fmt.Sprintf(" across %d %s", dirsWithChanges, dirWord)
+	}
+
+	result.Summary = fmt.Sprintf("%s %d %s%s: %d %s in %d %s",
+		action, totalFiles, fileWord, dirInfo, totalReplacements, replacementWord, totalLines, lineWord)
 
 	return result, nil
 }
