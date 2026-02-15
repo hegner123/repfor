@@ -11,7 +11,10 @@ An MCP server tool for searching and replacing strings in files across directori
 
 - **MCP server by default** - Optimized for Claude Code integration
 - **In-place replacements** - Modify files directly with exact string matching
-- **Multi-directory support** - Process multiple directories in controlled, single-depth scans
+- **Multi-directory support** - Process multiple directories in single-depth or recursive scans
+- **File mode** - Target specific files by path instead of scanning directories
+- **Multi-line support** - Search and replace patterns spanning multiple lines using `\n`
+- **Recursive scanning** - Optionally recurse into subdirectories
 - **Dry-run mode** - Preview changes before applying them
 - **Compact JSON output** - Token-efficient summary statistics
 - **Exclude filtering** - Prevent replacements in lines containing specific patterns
@@ -99,7 +102,6 @@ repfor tool with:
 
 ### When NOT to use repfor
 - Complex pattern replacements requiring regex (use manual editing)
-- Multi-line replacements (use Edit tool)
 - Single file edits (use Edit tool for precision)
 - When you need to see full file context before/after
 ```
@@ -133,11 +135,14 @@ repfor --cli --search <string> --replace <string> [options]
 
 - `--cli` - Run in CLI mode (default is MCP server mode)
 - `--dir` - Comma-separated list of directories to search (defaults to current directory)
+- `--file` - Comma-separated list of files to process (takes precedence over `--dir`)
 - `--ext` - File extension to filter (e.g., `.go`, `.txt`, `.js`)
 - `--exclude` - Comma-separated list of strings to exclude from replacement
 - `--case-insensitive` - Perform case-insensitive search
 - `--whole-word` - Match whole words only (recommended)
 - `--dry-run` - Preview changes without modifying files
+- `--recursive` - Recursively search subdirectories
+- `--verbose` - Show progress on stderr
 
 ## Examples
 
@@ -258,9 +263,9 @@ The tool outputs compact JSON with per-directory summary statistics:
 - **Dry-run mode:** Preview changes before applying
 - **Exclude filters:** Prevent replacements in specific contexts
 - **Whole-word matching:** Avoid partial matches
-- **Single-depth scanning:** Non-recursive to limit scope
+- **Single-depth by default:** Non-recursive to limit scope (use `--recursive` to opt in)
 - **Extension filtering:** Target specific file types
-- **Atomic replacements:** Files are only modified if all operations succeed
+- **Atomic writes:** Temp file + rename pattern prevents data loss on write failures
 
 ## Workflow Integration
 
@@ -292,8 +297,10 @@ The tool outputs compact JSON with per-directory summary statistics:
 
 - **Default mode:** MCP server (JSON-RPC 2.0 over stdin/stdout)
 - **CLI mode:** Direct JSON output (requires `--cli` flag)
-- **Single-depth:** Non-recursive scanning per directory
+- **Single-depth by default:** Optional recursive scanning with `--recursive`
 - **Multi-directory:** Controlled replacements across specific directories
+- **File mode:** Target specific files by path instead of directory scanning
+- **Multi-line:** Search/replace patterns spanning multiple lines via `\n`
 - **In-place modification:** Files are modified directly (no backups created)
 - **Exact matching:** No regex patterns, only literal string matching
 

@@ -42,11 +42,14 @@ Required flags:
 Optional flags:
 - `--cli` - Run in CLI mode (default is MCP server mode)
 - `--dir` - Comma-separated list of directories to search (defaults to current directory)
+- `--file` - Comma-separated list of files to process (takes precedence over `--dir`)
 - `--ext` - File extension filter (e.g., `.go`, `.txt`)
 - `--exclude` - Comma-separated list of strings to exclude from replacement
 - `--case-insensitive` - Case-insensitive search
 - `--whole-word` - Match whole words only
 - `--dry-run` - Preview changes without modifying files
+- `--recursive` - Recursively search subdirectories
+- `--verbose` - Show progress on stderr
 
 ## Architecture
 
@@ -67,8 +70,10 @@ The replacement flow:
 3. `replaceInFile()` - Processes individual files, applies replacements, returns statistics
 
 **Key features:**
-- **Non-recursive**: Only scans immediate directory contents (skips subdirectories)
+- **Single-depth by default**: Scans immediate directory contents; use `--recursive` to recurse into subdirectories
 - **Multi-directory**: Processes multiple directories in one invocation
+- **File mode**: Target specific files by path (takes precedence over directory scanning)
+- **Multi-line support**: When search or replace contains `\n`, switches to whole-file processing
 - **Exclude filtering**: Skips replacement in lines containing any of the exclude patterns
 - **Extension filtering**: Applied before file reading for efficiency
 - **In-place modification**: Files are modified directly (no backups)
@@ -76,17 +81,18 @@ The replacement flow:
 - **Exact string matching**: No regex, only literal string replacements
 
 Key implementation details:
-- Files are read entirely into memory as line slices
+- **Single-line path**: Files are read as line slices via `bufio.Scanner`. Search/replace operates per-line.
+- **Multi-line path**: When search or replace contains `\n`, `replaceInFileMultiline()` reads the entire file, normalizes line endings in the search/replace strings (converts `\n` to `\r\n` for CRLF files), and performs whole-content replacement via `replaceContentMultiline()`.
 - Whole-word matching uses custom `containsWholeWord()` that checks word boundaries using `isWordChar()` (alphanumeric + underscore)
-- Case-insensitive search converts both search term and line content to lowercase
+- Case-insensitive search converts both search term and content to lowercase for matching
 - Exclude patterns also respect case-insensitive flag
-- Four replacement modes:
+- Four replacement modes (used in both single-line and multi-line paths):
   - Standard: `strings.ReplaceAll()` for simple cases
   - Case-insensitive: `caseInsensitiveReplace()` preserves original case in non-replaced parts
   - Whole-word: `wholeWordReplace()` checks word boundaries
   - Combined: `caseInsensitiveWholeWordReplace()` for both features
-- Replacement counting uses `countReplacements()` to accurately track changes per line
-- Files are written back using `writeFile()` with proper line endings
+- Replacement counting uses `countReplacements()` per line, or affected-line tracking via a line-number set in multi-line mode
+- Files are written atomically using `writeFileAtomic()` (line-based) or `writeFileAtomicBytes()` (multi-line) with temp file + rename
 
 ### Output Format
 
@@ -113,11 +119,18 @@ The MCP server implements three JSON-RPC methods:
 Key types:
 - `Config`: Unified configuration for both CLI and MCP modes
   - `Dirs []string` - List of directories to process
+  - `Files []string` - List of specific files to process (takes precedence over Dirs)
   - `Search string` - String to search for
   - `Replace string` - String to replace with
+  - `Ext string` - File extension filter
   - `Exclude []string` - List of exclude patterns
+  - `CaseInsensitive bool` - Case-insensitive search
+  - `WholeWord bool` - Whole-word matching
   - `DryRun bool` - Whether to preview only
+  - `Recursive bool` - Recurse into subdirectories
   - `CLIMode bool` - Whether to run in CLI mode
+  - `Verbose bool` - Show progress on stderr
+  - `ReplaceSet bool` - Tracks if --replace was explicitly provided (allows empty string)
 - `Result`: Top-level result with `Directories []DirectoryResult` and `DryRun bool`
 - `DirectoryResult`: Per-directory results with:
   - `Dir string` - Directory path
@@ -140,10 +153,11 @@ This tool deliberately avoids regex for safety and predictability:
 ### File Safety
 
 - Files are only modified if replacement is successful
+- Atomic writes via temp file + rename prevent partial writes
 - Dry-run mode allows previewing before applying
 - Extension filtering limits scope
 - Exclude patterns prevent unwanted replacements
-- Single-depth scanning limits blast radius
+- Single-depth scanning by default limits blast radius (recursive is opt-in)
 
 ### Recommended Workflow
 
@@ -159,7 +173,7 @@ This tool deliberately avoids regex for safety and predictability:
 repfor is built on checkfor's architecture but focused on replacements:
 
 **Similarities:**
-- Same multi-directory, single-depth scanning
+- Same multi-directory scanning (single-depth by default, recursive optional)
 - Same filtering options (ext, case-insensitive, whole-word, exclude)
 - Same MCP server + CLI mode design
 - Same compact JSON output philosophy
@@ -174,13 +188,14 @@ repfor is built on checkfor's architecture but focused on replacements:
 
 ## Important Notes
 
-- The tool is **single-depth only** - it does not recurse into subdirectories
+- The tool is **single-depth by default** - use `--recursive` or the `recursive` MCP parameter to recurse into subdirectories
 - Default mode is **MCP server** - runs without flags
 - CLI mode requires `--cli` flag
 - Both `--search` and `--replace` are required
 - File paths in results are **relative to each directory**
 - All JSON output is **compact** (no indentation/newlines) for token efficiency
 - Replacements are **in-place** with no backups
+- Multi-line search/replace activates when search or replace contains `\n`
 - Multi-directory support enables controlled replacements across specific packages
 - Warnings for unreadable/unwritable files go to stderr
 - MCP mode expects one JSON-RPC request per line on stdin
@@ -190,6 +205,7 @@ repfor is built on checkfor's architecture but focused on replacements:
 
 When adding tests, focus on:
 - Core replacement functions (case-insensitive, whole-word, combined)
+- Multi-line replacement (basic, dry-run, exclude, case-insensitive, whole-word, CRLF)
 - File modification (dry-run vs actual writes)
 - Filter statistics tracking
 - MCP JSON-RPC protocol compliance

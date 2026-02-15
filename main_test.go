@@ -468,9 +468,9 @@ func TestWriteFile_PreservesLineEndings(t *testing.T) {
 	lines := []string{"line1", "line2", "line3"}
 	filePath := filepath.Join(tmpDir, "test.txt")
 
-	err := writeFile(filePath, lines)
+	err := writeFileAtomic(filePath, lines, "\n")
 	if err != nil {
-		t.Fatalf("writeFile failed: %v", err)
+		t.Fatalf("writeFileAtomic failed: %v", err)
 	}
 
 	content := readFileContent(t, filePath)
@@ -536,5 +536,365 @@ func TestReplaceInFile_NoMatches(t *testing.T) {
 	actualContent := readFileContent(t, filePath)
 	if actualContent != content {
 		t.Errorf("File should not have been modified")
+	}
+}
+
+// Multiline helper tests
+
+func TestIsMultiline(t *testing.T) {
+	tests := []struct {
+		name     string
+		search   string
+		replace  string
+		expected bool
+	}{
+		{"both single-line", "hello", "world", false},
+		{"search has newline", "hello\nworld", "combined", true},
+		{"replace has newline", "combined", "hello\nworld", true},
+		{"both have newlines", "a\nb", "c\nd", true},
+		{"empty strings", "", "", false},
+		{"newline only in search", "\n", "x", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isMultiline(tt.search, tt.replace)
+			if result != tt.expected {
+				t.Errorf("isMultiline(%q, %q) = %v, want %v",
+					tt.search, tt.replace, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCountChangedLines(t *testing.T) {
+	tests := []struct {
+		name     string
+		original string
+		modified string
+		expected int
+	}{
+		{"identical", "a\nb\nc", "a\nb\nc", 0},
+		{"one line changed", "a\nb\nc", "a\nx\nc", 1},
+		{"all lines changed", "a\nb\nc", "x\ny\nz", 3},
+		{"fewer lines", "a\nb\nc", "a\nb", 1},
+		{"more lines", "a\nb", "a\nb\nc", 1},
+		{"empty original", "", "a\nb", 2},
+		{"empty modified", "a\nb", "", 2},
+		{"both empty", "", "", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := countChangedLines(tt.original, tt.modified)
+			if result != tt.expected {
+				t.Errorf("countChangedLines(%q, %q) = %d, want %d",
+					tt.original, tt.modified, result, tt.expected)
+			}
+		})
+	}
+}
+
+// Multiline file operation tests
+
+func TestReplaceInFileMultiline_Basic(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	content := "line1\nline2\nline3\n"
+	filePath := createTestFile(t, tmpDir, "test.txt", content)
+
+	config := Config{
+		Search:  "line1\nline2",
+		Replace: "combined",
+		DryRun:  false,
+	}
+
+	linesChanged, replacements, err := replaceInFile(filePath, config)
+	if err != nil {
+		t.Fatalf("replaceInFile failed: %v", err)
+	}
+
+	if linesChanged != 2 {
+		t.Errorf("Expected 2 lines changed, got %d", linesChanged)
+	}
+
+	if replacements != 1 {
+		t.Errorf("Expected 1 replacement, got %d", replacements)
+	}
+
+	actualContent := readFileContent(t, filePath)
+	expectedContent := "combined\nline3\n"
+	if actualContent != expectedContent {
+		t.Errorf("File content incorrect.\nExpected:\n%q\nGot:\n%q", expectedContent, actualContent)
+	}
+}
+
+func TestReplaceInFileMultiline_DryRun(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	content := "line1\nline2\nline3\n"
+	filePath := createTestFile(t, tmpDir, "test.txt", content)
+
+	config := Config{
+		Search:  "line1\nline2",
+		Replace: "combined",
+		DryRun:  true,
+	}
+
+	linesChanged, replacements, err := replaceInFile(filePath, config)
+	if err != nil {
+		t.Fatalf("replaceInFile failed: %v", err)
+	}
+
+	if linesChanged != 2 {
+		t.Errorf("Expected 2 lines changed, got %d", linesChanged)
+	}
+
+	if replacements != 1 {
+		t.Errorf("Expected 1 replacement, got %d", replacements)
+	}
+
+	// Verify file was NOT modified
+	actualContent := readFileContent(t, filePath)
+	if actualContent != content {
+		t.Errorf("File was modified in dry-run mode")
+	}
+}
+
+func TestReplaceInFileMultiline_WithExclude(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	// First occurrence has "SKIP" on the same line as "bbb", second does not
+	content := "aaa\nbbb SKIP\naaa\nbbb\n"
+	filePath := createTestFile(t, tmpDir, "test.txt", content)
+
+	config := Config{
+		Search:  "aaa\nbbb",
+		Replace: "xxx",
+		Exclude: []string{"SKIP"},
+		DryRun:  false,
+	}
+
+	linesChanged, replacements, err := replaceInFile(filePath, config)
+	if err != nil {
+		t.Fatalf("replaceInFile failed: %v", err)
+	}
+
+	if linesChanged != 2 {
+		t.Errorf("Expected 2 lines changed, got %d", linesChanged)
+	}
+
+	if replacements != 1 {
+		t.Errorf("Expected 1 replacement, got %d", replacements)
+	}
+
+	actualContent := readFileContent(t, filePath)
+	expectedContent := "aaa\nbbb SKIP\nxxx\n"
+	if actualContent != expectedContent {
+		t.Errorf("File content incorrect.\nExpected:\n%q\nGot:\n%q", expectedContent, actualContent)
+	}
+}
+
+func TestReplaceInFileMultiline_CaseInsensitive(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	content := "Hello\nWorld\nfoo\n"
+	filePath := createTestFile(t, tmpDir, "test.txt", content)
+
+	config := Config{
+		Search:          "hello\nworld",
+		Replace:         "greetings",
+		CaseInsensitive: true,
+		DryRun:          false,
+	}
+
+	linesChanged, replacements, err := replaceInFile(filePath, config)
+	if err != nil {
+		t.Fatalf("replaceInFile failed: %v", err)
+	}
+
+	if linesChanged != 2 {
+		t.Errorf("Expected 2 lines changed, got %d", linesChanged)
+	}
+
+	if replacements != 1 {
+		t.Errorf("Expected 1 replacement, got %d", replacements)
+	}
+
+	actualContent := readFileContent(t, filePath)
+	expectedContent := "greetings\nfoo\n"
+	if actualContent != expectedContent {
+		t.Errorf("File content incorrect.\nExpected:\n%q\nGot:\n%q", expectedContent, actualContent)
+	}
+}
+
+func TestReplaceInFileMultiline_WholeWord(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	// "bar\nbaz" appears twice: once as whole words, once inside "foobar\nbaz"
+	content := "foo bar\nbaz qux\nfoobar\nbaz\n"
+	filePath := createTestFile(t, tmpDir, "test.txt", content)
+
+	config := Config{
+		Search:    "bar\nbaz",
+		Replace:   "xxx",
+		WholeWord: true,
+		DryRun:    false,
+	}
+
+	linesChanged, replacements, err := replaceInFile(filePath, config)
+	if err != nil {
+		t.Fatalf("replaceInFile failed: %v", err)
+	}
+
+	if linesChanged != 2 {
+		t.Errorf("Expected 2 lines changed, got %d", linesChanged)
+	}
+
+	if replacements != 1 {
+		t.Errorf("Expected 1 replacement, got %d", replacements)
+	}
+
+	actualContent := readFileContent(t, filePath)
+	expectedContent := "foo xxx qux\nfoobar\nbaz\n"
+	if actualContent != expectedContent {
+		t.Errorf("File content incorrect.\nExpected:\n%q\nGot:\n%q", expectedContent, actualContent)
+	}
+}
+
+func TestReplaceInFileMultiline_MultipleOccurrences(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	content := "aaa\nbbb\nccc\naaa\nbbb\nddd\n"
+	filePath := createTestFile(t, tmpDir, "test.txt", content)
+
+	config := Config{
+		Search:  "aaa\nbbb",
+		Replace: "xxx",
+		DryRun:  false,
+	}
+
+	linesChanged, replacements, err := replaceInFile(filePath, config)
+	if err != nil {
+		t.Fatalf("replaceInFile failed: %v", err)
+	}
+
+	if linesChanged != 4 {
+		t.Errorf("Expected 4 lines changed, got %d", linesChanged)
+	}
+
+	if replacements != 2 {
+		t.Errorf("Expected 2 replacements, got %d", replacements)
+	}
+
+	actualContent := readFileContent(t, filePath)
+	expectedContent := "xxx\nccc\nxxx\nddd\n"
+	if actualContent != expectedContent {
+		t.Errorf("File content incorrect.\nExpected:\n%q\nGot:\n%q", expectedContent, actualContent)
+	}
+}
+
+func TestReplaceInFileMultiline_ReplaceWithMoreLines(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	content := "line1\nline2\nline3\n"
+	filePath := createTestFile(t, tmpDir, "test.txt", content)
+
+	config := Config{
+		Search:  "line2",
+		Replace: "line2a\nline2b",
+		DryRun:  false,
+	}
+
+	linesChanged, replacements, err := replaceInFile(filePath, config)
+	if err != nil {
+		t.Fatalf("replaceInFile failed: %v", err)
+	}
+
+	if linesChanged != 1 {
+		t.Errorf("Expected 1 line changed, got %d", linesChanged)
+	}
+
+	if replacements != 1 {
+		t.Errorf("Expected 1 replacement, got %d", replacements)
+	}
+
+	actualContent := readFileContent(t, filePath)
+	expectedContent := "line1\nline2a\nline2b\nline3\n"
+	if actualContent != expectedContent {
+		t.Errorf("File content incorrect.\nExpected:\n%q\nGot:\n%q", expectedContent, actualContent)
+	}
+}
+
+func TestReplaceInFileMultiline_ReplaceWithFewerLines(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	content := "line1\nline2\nline3\nline4\n"
+	filePath := createTestFile(t, tmpDir, "test.txt", content)
+
+	config := Config{
+		Search:  "line2\nline3",
+		Replace: "combined",
+		DryRun:  false,
+	}
+
+	linesChanged, replacements, err := replaceInFile(filePath, config)
+	if err != nil {
+		t.Fatalf("replaceInFile failed: %v", err)
+	}
+
+	if linesChanged != 2 {
+		t.Errorf("Expected 2 lines changed, got %d", linesChanged)
+	}
+
+	if replacements != 1 {
+		t.Errorf("Expected 1 replacement, got %d", replacements)
+	}
+
+	actualContent := readFileContent(t, filePath)
+	expectedContent := "line1\ncombined\nline4\n"
+	if actualContent != expectedContent {
+		t.Errorf("File content incorrect.\nExpected:\n%q\nGot:\n%q", expectedContent, actualContent)
+	}
+}
+
+func TestReplaceInFileMultiline_CRLF(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	content := "line1\r\nline2\r\nline3\r\n"
+	filePath := createTestFile(t, tmpDir, "test.txt", content)
+
+	config := Config{
+		Search:  "line1\nline2",
+		Replace: "combined",
+		DryRun:  false,
+	}
+
+	linesChanged, replacements, err := replaceInFile(filePath, config)
+	if err != nil {
+		t.Fatalf("replaceInFile failed: %v", err)
+	}
+
+	if linesChanged != 2 {
+		t.Errorf("Expected 2 lines changed, got %d", linesChanged)
+	}
+
+	if replacements != 1 {
+		t.Errorf("Expected 1 replacement, got %d", replacements)
+	}
+
+	actualContent := readFileContent(t, filePath)
+	expectedContent := "combined\r\nline3\r\n"
+	if actualContent != expectedContent {
+		t.Errorf("File content incorrect.\nExpected:\n%q\nGot:\n%q", expectedContent, actualContent)
 	}
 }

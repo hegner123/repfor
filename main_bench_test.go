@@ -432,7 +432,7 @@ func BenchmarkWriteFile_SmallFile(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = writeFile(filePath, lines)
+		_ = writeFileAtomic(filePath, lines, "\n")
 	}
 }
 
@@ -453,7 +453,7 @@ func BenchmarkWriteFile_LargeFile(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = writeFile(filePath, lines)
+		_ = writeFileAtomic(filePath, lines, "\n")
 	}
 }
 
