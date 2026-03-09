@@ -323,6 +323,13 @@ repfor is the companion tool to checkfor:
 
 Use checkfor to verify, use repfor to refactor.
 
+## Platform Support
+
+- macOS
+- Linux
+
+Windows is not supported.
+
 ## License
 
 MIT

@@ -1,5 +1,0 @@
-This is a test file.
-The word test appears multiple times.
-Testing is important.
-test test test
-This line has no match.

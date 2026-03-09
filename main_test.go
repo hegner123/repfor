@@ -567,6 +567,50 @@ func TestIsMultiline(t *testing.T) {
 	}
 }
 
+func TestUnescapeString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"no escapes", "hello world", "hello world"},
+		{"literal backslash-n", `line1\nline2`, "line1\nline2"},
+		{"literal backslash-r", `word1\rword2`, "word1\rword2"},
+		{"literal backslash-t", `col1\tcol2`, "col1\tcol2"},
+		{"multiple escapes", `a\nb\nc`, "a\nb\nc"},
+		{"mixed escapes", `a\tb\nc`, "a\tb\nc"},
+		{"empty string", "", ""},
+		{"no false positives", `hello\\nworld`, "hello\\\nworld"},
+		{"already real newline", "line1\nline2", "line1\nline2"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := unescapeString(tt.input)
+			if result != tt.expected {
+				t.Errorf("unescapeString(%q) = %q, want %q",
+					tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestUnescapeString_MultilineDetection(t *testing.T) {
+	// Simulates what happens when MCP JSON sends "line1\\nline2"
+	// JSON decoder produces literal backslash-n, unescapeString converts to real newline
+	literalEscaped := `line1\nline2` // This is what JSON decoder gives us
+	unescaped := unescapeString(literalEscaped)
+
+	if !isMultiline(unescaped, "replacement") {
+		t.Error("after unescapeString, isMultiline should detect the newline")
+	}
+
+	// Without unescaping, isMultiline would NOT detect it (this was the bug)
+	if isMultiline(literalEscaped, "replacement") {
+		t.Error("literal backslash-n should NOT trigger isMultiline (it's 2 chars, not a newline)")
+	}
+}
+
 func TestCountChangedLines(t *testing.T) {
 	tests := []struct {
 		name     string

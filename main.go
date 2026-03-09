@@ -183,6 +183,11 @@ func parseFlags() Config {
 		}
 	}
 
+	// Convert literal escape sequences from shell args to actual control characters.
+	// Shell passes \n as two characters (backslash + n); isMultiline() needs real newlines.
+	config.Search = unescapeString(config.Search)
+	config.Replace = unescapeString(config.Replace)
+
 	return config
 }
 
@@ -292,14 +297,23 @@ func runMCPServer() {
 }
 
 func handleRequest(req JSONRPCRequest) {
+	// JSON-RPC 2.0: notifications (no id) must not receive a response
+	isNotification := req.ID == nil
+
 	switch req.Method {
 	case "initialize":
 		handleInitialize(req)
+	case "notifications/initialized":
+		// MCP lifecycle notification, no response required
+		return
 	case "tools/list":
 		handleToolsList(req)
 	case "tools/call":
 		handleToolsCall(req)
 	default:
+		if isNotification {
+			return
+		}
 		sendError(req.ID, -32601, "Method not found")
 	}
 }
@@ -406,6 +420,12 @@ func handleToolsCall(req JSONRPCRequest) {
 		sendError(req.ID, -32602, "Missing or invalid 'replace' parameter")
 		return
 	}
+
+	// Convert literal escape sequences to actual control characters.
+	// JSON decoding turns \\n into the 2-char string "\n" (backslash + n),
+	// but isMultiline() needs real newline bytes to activate multi-line mode.
+	search = unescapeString(search)
+	replace = unescapeString(replace)
 
 	config := Config{
 		Search:  search,
@@ -1066,6 +1086,16 @@ func isWordChar(r rune) bool {
 
 func isMultiline(search, replace string) bool {
 	return strings.Contains(search, "\n") || strings.Contains(replace, "\n")
+}
+
+// unescapeString converts literal escape sequences (e.g. backslash followed by 'n')
+// into actual control characters. This is needed because JSON decoding and shell
+// argument passing deliver literal two-character sequences, not real newlines/tabs.
+func unescapeString(s string) string {
+	s = strings.ReplaceAll(s, "\\n", "\n")
+	s = strings.ReplaceAll(s, "\\r", "\r")
+	s = strings.ReplaceAll(s, "\\t", "\t")
+	return s
 }
 
 func countChangedLines(original, modified string) int {

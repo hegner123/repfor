@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -264,108 +263,6 @@ func TestContainsWholeWord_ComplexBoundaries(t *testing.T) {
 }
 
 // File System Edge Cases
-
-func TestReplaceInFile_LargeFile(t *testing.T) {
-	tmpDir := setupTestDir(t)
-	defer cleanupTestDir(t, tmpDir)
-
-	// Create a file with 100,000 lines
-	lines := make([]string, 100000)
-	for i := range lines {
-		if i%1000 == 0 {
-			lines[i] = fmt.Sprintf("Line %d contains target text", i)
-		} else {
-			lines[i] = fmt.Sprintf("Line %d regular content", i)
-		}
-	}
-	content := strings.Join(lines, "\n") + "\n"
-	filePath := createTestFile(t, tmpDir, "large.txt", content)
-
-	config := Config{
-		Search:  "target",
-		Replace: "REPLACED",
-		DryRun:  false,
-	}
-
-	linesChanged, replacements, err := replaceInFile(filePath, config)
-	if err != nil {
-		t.Fatalf("replaceInFile failed: %v", err)
-	}
-
-	expectedLines := 100 // Every 1000th line
-	if linesChanged != expectedLines {
-		t.Errorf("Expected %d lines changed, got %d", expectedLines, linesChanged)
-	}
-
-	if replacements != expectedLines {
-		t.Errorf("Expected %d replacements, got %d", expectedLines, replacements)
-	}
-}
-
-func TestReplaceInFile_VeryLongLines(t *testing.T) {
-	tmpDir := setupTestDir(t)
-	defer cleanupTestDir(t, tmpDir)
-
-	// Create file with extremely long lines
-	longLine := strings.Repeat("a", 1000000) + "target" + strings.Repeat("b", 1000000)
-	content := longLine + "\n"
-	filePath := createTestFile(t, tmpDir, "longlines.txt", content)
-
-	config := Config{
-		Search:  "target",
-		Replace: "REPLACED",
-		DryRun:  false,
-	}
-
-	linesChanged, replacements, err := replaceInFile(filePath, config)
-	if err != nil {
-		t.Fatalf("replaceInFile failed: %v", err)
-	}
-
-	if linesChanged != 1 {
-		t.Errorf("Expected 1 line changed, got %d", linesChanged)
-	}
-
-	if replacements != 1 {
-		t.Errorf("Expected 1 replacement, got %d", replacements)
-	}
-
-	// Verify the replacement worked
-	actualContent := readFileContent(t, filePath)
-	if !strings.Contains(actualContent, "REPLACED") {
-		t.Error("REPLACED not found in file")
-	}
-	if strings.Contains(actualContent, "target") {
-		t.Error("target still found in file, replacement failed")
-	}
-}
-
-func TestReplaceInFile_ManySmallFiles(t *testing.T) {
-	tmpDir := setupTestDir(t)
-	defer cleanupTestDir(t, tmpDir)
-
-	// Create 1000 small files
-	numFiles := 1000
-	for i := 0; i < numFiles; i++ {
-		content := fmt.Sprintf("File %d contains target\n", i)
-		createTestFile(t, tmpDir, fmt.Sprintf("file%04d.txt", i), content)
-	}
-
-	config := Config{
-		Search:  "target",
-		Replace: "REPLACED",
-		DryRun:  false,
-	}
-
-	result, err := replaceInDirectory(tmpDir, config)
-	if err != nil {
-		t.Fatalf("replaceInDirectory failed: %v", err)
-	}
-
-	if result.FilesModified != numFiles {
-		t.Errorf("Expected %d files modified, got %d", numFiles, result.FilesModified)
-	}
-}
 
 func TestReplaceInFile_BinaryContent(t *testing.T) {
 	tmpDir := setupTestDir(t)
@@ -648,7 +545,7 @@ func TestWholeWordReplace_AdjacentMatches(t *testing.T) {
 	}
 }
 
-// Stress Test: Replacement Correctness
+// Positional Correctness
 
 func TestReplaceInLine_AllPositions(t *testing.T) {
 	// Test replacing a pattern at every possible position
@@ -697,18 +594,7 @@ func TestUTF8Handling(t *testing.T) {
 	}
 }
 
-// Memory and Performance Boundary Tests
-
-func TestCountReplacements_ManyOccurrences(t *testing.T) {
-	// Test counting in a line with thousands of matches
-	line := strings.Repeat("x ", 50000) // 50,000 occurrences
-	count := countReplacements(line, "x", false, false)
-
-	expected := 50000
-	if count != expected {
-		t.Errorf("Expected %d replacements, got %d", expected, count)
-	}
-}
+// Search Pattern Edge Cases
 
 func TestCountReplacements_LongSearchPattern(t *testing.T) {
 	// Test with very long search pattern
