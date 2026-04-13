@@ -40,7 +40,8 @@ type Config struct {
 	Search          string
 	Replace         string
 	Ext             string
-	Exclude         []string
+	ExcludeFiles    []string
+	ExcludeLines    []string
 	CaseInsensitive bool
 	WholeWord       bool
 	DryRun          bool
@@ -135,7 +136,8 @@ func main() {
 func parseFlags() Config {
 	config := Config{}
 	var dirStr string
-	var excludeStr string
+	var excludeFilesStr string
+	var excludeLinesStr string
 
 	flag.BoolVar(&config.CLIMode, "cli", false, "Run in CLI mode (default is MCP server mode)")
 	flag.StringVar(&dirStr, "dir", "", "Comma-separated list of directories to search (defaults to current directory)")
@@ -144,7 +146,8 @@ func parseFlags() Config {
 	flag.StringVar(&config.Search, "search", "", "String to search for (required)")
 	flag.StringVar(&config.Replace, "replace", "", "String to replace with (required, use empty string to delete)")
 	flag.StringVar(&config.Ext, "ext", "", "File extension to filter (e.g., .go, .txt)")
-	flag.StringVar(&excludeStr, "exclude", "", "Comma-separated list of strings to exclude from replacement")
+	flag.StringVar(&excludeFilesStr, "exclude-files", "", "Comma-separated filename patterns to skip (substring match against filename)")
+	flag.StringVar(&excludeLinesStr, "exclude-lines", "", "Comma-separated strings to exclude from matched lines")
 	flag.BoolVar(&config.CaseInsensitive, "case-insensitive", false, "Perform case-insensitive search")
 	flag.BoolVar(&config.WholeWord, "whole-word", false, "Match whole words only")
 	flag.BoolVar(&config.DryRun, "dry-run", false, "Preview changes without modifying files")
@@ -176,10 +179,17 @@ func parseFlags() Config {
 		config.Dirs = []string{"."}
 	}
 
-	if excludeStr != "" {
-		config.Exclude = strings.Split(excludeStr, ",")
-		for i := range config.Exclude {
-			config.Exclude[i] = strings.TrimSpace(config.Exclude[i])
+	if excludeFilesStr != "" {
+		config.ExcludeFiles = strings.Split(excludeFilesStr, ",")
+		for i := range config.ExcludeFiles {
+			config.ExcludeFiles[i] = strings.TrimSpace(config.ExcludeFiles[i])
+		}
+	}
+
+	if excludeLinesStr != "" {
+		config.ExcludeLines = strings.Split(excludeLinesStr, ",")
+		for i := range config.ExcludeLines {
+			config.ExcludeLines[i] = strings.TrimSpace(config.ExcludeLines[i])
 		}
 	}
 
@@ -364,9 +374,13 @@ func handleToolsList(req JSONRPCRequest) {
 							Type:        "string",
 							Description: "File extension to filter (e.g., '.go', '.txt'). Optional.",
 						},
-						"exclude": {
+						"exclude_files": {
 							Type:        "array",
-							Description: "Array of strings to exclude from replacement. Lines containing any of these strings will not be modified. Optional.",
+							Description: "Filename patterns to skip. Files whose name contains any of these substrings will not be processed. Optional.",
+						},
+						"exclude_lines": {
+							Type:        "array",
+							Description: "Line content patterns to filter. Lines containing any of these strings will not be modified. Optional.",
 						},
 						"case_insensitive": {
 							Type:        "boolean",
@@ -471,11 +485,20 @@ func handleToolsCall(req JSONRPCRequest) {
 		config.Ext = ext
 	}
 
-	if excludeArray, ok := params.Arguments["exclude"].([]any); ok {
-		config.Exclude = make([]string, 0, len(excludeArray))
-		for _, v := range excludeArray {
+	if excludeFilesArray, ok := params.Arguments["exclude_files"].([]any); ok {
+		config.ExcludeFiles = make([]string, 0, len(excludeFilesArray))
+		for _, v := range excludeFilesArray {
 			if str, ok := v.(string); ok {
-				config.Exclude = append(config.Exclude, str)
+				config.ExcludeFiles = append(config.ExcludeFiles, str)
+			}
+		}
+	}
+
+	if excludeLinesArray, ok := params.Arguments["exclude_lines"].([]any); ok {
+		config.ExcludeLines = make([]string, 0, len(excludeLinesArray))
+		for _, v := range excludeLinesArray {
+			if str, ok := v.(string); ok {
+				config.ExcludeLines = append(config.ExcludeLines, str)
 			}
 		}
 	}
@@ -663,6 +686,21 @@ func collectDirectoriesRecursive(dirs []string) []string {
 	return allDirs
 }
 
+func shouldExcludeFile(filename string, patterns []string, caseInsensitive bool) bool {
+	for _, pattern := range patterns {
+		name := filename
+		pat := pattern
+		if caseInsensitive {
+			name = strings.ToLower(name)
+			pat = strings.ToLower(pat)
+		}
+		if strings.Contains(name, pat) {
+			return true
+		}
+	}
+	return false
+}
+
 func replaceInDirectory(dir string, config Config) (*DirectoryResult, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -692,6 +730,10 @@ func replaceInDirectory(dir string, config Config) (*DirectoryResult, error) {
 		filename := entry.Name()
 
 		if config.Ext != "" && !strings.HasSuffix(filename, config.Ext) {
+			continue
+		}
+
+		if shouldExcludeFile(filename, config.ExcludeFiles, config.CaseInsensitive) {
 			continue
 		}
 
@@ -737,6 +779,10 @@ func replaceInFiles(filePaths []string, config Config) (*DirectoryResult, error)
 
 		// Check extension filter if specified
 		if config.Ext != "" && !strings.HasSuffix(filePath, config.Ext) {
+			continue
+		}
+
+		if shouldExcludeFile(filepath.Base(filePath), config.ExcludeFiles, config.CaseInsensitive) {
 			continue
 		}
 
@@ -851,7 +897,7 @@ func replaceInFile(path string, config Config) (int, int, error) {
 		}
 
 		excluded := false
-		for _, excludePattern := range config.Exclude {
+		for _, excludePattern := range config.ExcludeLines {
 			excludeToCheck := excludePattern
 			lineForExclude := line
 			if config.CaseInsensitive {
@@ -1235,7 +1281,7 @@ func replaceInFileMultiline(path string, config Config) (int, int, error) {
 
 	modified, replacements, linesChanged := replaceContentMultiline(
 		content, search, replace,
-		config.CaseInsensitive, config.WholeWord, config.Exclude,
+		config.CaseInsensitive, config.WholeWord, config.ExcludeLines,
 	)
 
 	if replacements == 0 {

@@ -277,10 +277,10 @@ func TestReplaceInFile_WithExclude(t *testing.T) {
 	filePath := createTestFile(t, tmpDir, "test.txt", content)
 
 	config := Config{
-		Search:  "result",
-		Replace: "res",
-		Exclude: []string{"dirResult"},
-		DryRun:  false,
+		Search:       "result",
+		Replace:      "res",
+		ExcludeLines: []string{"dirResult"},
+		DryRun:       false,
 	}
 
 	linesChanged, replacements, err := replaceInFile(filePath, config)
@@ -305,6 +305,198 @@ func TestReplaceInFile_WithExclude(t *testing.T) {
 	expectedContent := "res = calculate()\ndirResult = process()\nreturn res\n"
 	if actualContent != expectedContent {
 		t.Errorf("File content incorrect.\nExpected:\n%s\nGot:\n%s", expectedContent, actualContent)
+	}
+}
+
+func TestExcludeFiles_SinglePattern(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	createTestFile(t, tmpDir, "main.go", "func main() {\n}\n")
+	createTestFile(t, tmpDir, "main_test.go", "func TestMain() {\n}\n")
+	createTestFile(t, tmpDir, "utils.go", "func helper() {\n}\n")
+
+	config := Config{
+		Search:       "func",
+		Replace:      "FUNC",
+		Dirs:         []string{tmpDir},
+		ExcludeFiles: []string{"_test.go"},
+	}
+
+	result, err := replaceInDirectories(config)
+	if err != nil {
+		t.Fatalf("replaceInDirectories failed: %v", err)
+	}
+
+	if result.Directories[0].FilesModified != 2 {
+		t.Errorf("Expected 2 files modified, got %d", result.Directories[0].FilesModified)
+	}
+
+	// Verify test file was NOT modified
+	testContent := readFileContent(t, filepath.Join(tmpDir, "main_test.go"))
+	if strings.Contains(testContent, "FUNC") {
+		t.Error("Test file should not have been modified")
+	}
+
+	// Verify non-test files WERE modified
+	mainContent := readFileContent(t, filepath.Join(tmpDir, "main.go"))
+	if !strings.Contains(mainContent, "FUNC") {
+		t.Error("main.go should have been modified")
+	}
+}
+
+func TestExcludeFiles_MultiplePatterns(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	createTestFile(t, tmpDir, "main.go", "func main() {}\n")
+	createTestFile(t, tmpDir, "main_test.go", "func TestMain() {}\n")
+	createTestFile(t, tmpDir, "generated.go", "func Gen() {}\n")
+	createTestFile(t, tmpDir, "utils.go", "func helper() {}\n")
+
+	config := Config{
+		Search:       "func",
+		Replace:      "FUNC",
+		Dirs:         []string{tmpDir},
+		ExcludeFiles: []string{"_test.go", "generated"},
+	}
+
+	result, err := replaceInDirectories(config)
+	if err != nil {
+		t.Fatalf("replaceInDirectories failed: %v", err)
+	}
+
+	if result.Directories[0].FilesModified != 2 {
+		t.Errorf("Expected 2 files modified, got %d", result.Directories[0].FilesModified)
+	}
+}
+
+func TestExcludeFiles_CaseInsensitive(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	createTestFile(t, tmpDir, "README.md", "hello world\n")
+	createTestFile(t, tmpDir, "readme.txt", "hello world\n")
+	createTestFile(t, tmpDir, "code.go", "hello world\n")
+
+	config := Config{
+		Search:          "hello",
+		Replace:         "hi",
+		Dirs:            []string{tmpDir},
+		ExcludeFiles:    []string{"readme"},
+		CaseInsensitive: true,
+	}
+
+	result, err := replaceInDirectories(config)
+	if err != nil {
+		t.Fatalf("replaceInDirectories failed: %v", err)
+	}
+
+	if result.Directories[0].FilesModified != 1 {
+		t.Errorf("Expected 1 file modified, got %d", result.Directories[0].FilesModified)
+	}
+
+	// Both README.md and readme.txt should be excluded
+	mdContent := readFileContent(t, filepath.Join(tmpDir, "README.md"))
+	if strings.Contains(mdContent, "hi") {
+		t.Error("README.md should not have been modified")
+	}
+}
+
+func TestExcludeFiles_DirectFileMode(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	f1 := createTestFile(t, tmpDir, "app.go", "func run() {}\n")
+	f2 := createTestFile(t, tmpDir, "app_test.go", "func TestRun() {}\n")
+
+	config := Config{
+		Search:       "func",
+		Replace:      "FUNC",
+		Files:        []string{f1, f2},
+		ExcludeFiles: []string{"_test.go"},
+	}
+
+	result, err := replaceInDirectories(config)
+	if err != nil {
+		t.Fatalf("replaceInDirectories failed: %v", err)
+	}
+
+	if result.Directories[0].FilesModified != 1 {
+		t.Errorf("Expected 1 file modified, got %d", result.Directories[0].FilesModified)
+	}
+
+	testContent := readFileContent(t, f2)
+	if strings.Contains(testContent, "FUNC") {
+		t.Error("Test file should not have been modified")
+	}
+}
+
+func TestExcludeFiles_CombinedWithExcludeLines(t *testing.T) {
+	tmpDir := setupTestDir(t)
+	defer cleanupTestDir(t, tmpDir)
+
+	createTestFile(t, tmpDir, "main.go", "result = calculate()\ndirResult = process()\nreturn result\n")
+	createTestFile(t, tmpDir, "main_test.go", "result = test()\n")
+
+	config := Config{
+		Search:       "result",
+		Replace:      "res",
+		Dirs:         []string{tmpDir},
+		ExcludeFiles: []string{"_test.go"},
+		ExcludeLines: []string{"dirResult"},
+	}
+
+	result, err := replaceInDirectories(config)
+	if err != nil {
+		t.Fatalf("replaceInDirectories failed: %v", err)
+	}
+
+	// Only main.go modified, and dirResult line skipped
+	if result.Directories[0].FilesModified != 1 {
+		t.Errorf("Expected 1 file modified, got %d", result.Directories[0].FilesModified)
+	}
+
+	mainContent := readFileContent(t, filepath.Join(tmpDir, "main.go"))
+	if !strings.Contains(mainContent, "dirResult") {
+		t.Error("dirResult line should not have been replaced")
+	}
+	if !strings.Contains(mainContent, "res = calculate()") {
+		t.Error("First line should have been replaced")
+	}
+
+	testContent := readFileContent(t, filepath.Join(tmpDir, "main_test.go"))
+	if testContent != "result = test()\n" {
+		t.Errorf("Test file should not have been modified, got: %q", testContent)
+	}
+}
+
+func TestShouldExcludeFile(t *testing.T) {
+	tests := []struct {
+		name            string
+		filename        string
+		patterns        []string
+		caseInsensitive bool
+		want            bool
+	}{
+		{"no patterns", "main.go", nil, false, false},
+		{"match suffix", "main_test.go", []string{"_test.go"}, false, true},
+		{"match substring", "main_test.go", []string{"_test"}, false, true},
+		{"no match", "main.go", []string{"_test"}, false, false},
+		{"case mismatch", "README.md", []string{"readme"}, false, false},
+		{"case insensitive match", "README.md", []string{"readme"}, true, true},
+		{"multiple patterns first match", "gen.go", []string{"gen", "test"}, false, true},
+		{"multiple patterns second match", "foo_test.go", []string{"gen", "_test"}, false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldExcludeFile(tt.filename, tt.patterns, tt.caseInsensitive)
+			if got != tt.want {
+				t.Errorf("shouldExcludeFile(%q, %v, %v) = %v, want %v",
+					tt.filename, tt.patterns, tt.caseInsensitive, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -716,10 +908,10 @@ func TestReplaceInFileMultiline_WithExclude(t *testing.T) {
 	filePath := createTestFile(t, tmpDir, "test.txt", content)
 
 	config := Config{
-		Search:  "aaa\nbbb",
-		Replace: "xxx",
-		Exclude: []string{"SKIP"},
-		DryRun:  false,
+		Search:       "aaa\nbbb",
+		Replace:      "xxx",
+		ExcludeLines: []string{"SKIP"},
+		DryRun:       false,
 	}
 
 	linesChanged, replacements, err := replaceInFile(filePath, config)

@@ -432,10 +432,10 @@ return result
 	filePath := createTestFile(t, tmpDir, "test.txt", content)
 
 	config := Config{
-		Search:  "result",
-		Replace: "res",
-		Exclude: []string{"dirresult", "tempresult"},
-		DryRun:  false,
+		Search:       "result",
+		Replace:      "res",
+		ExcludeLines: []string{"dirresult", "tempresult"},
+		DryRun:       false,
 	}
 
 	linesChanged, _, err := replaceInFile(filePath, config)
@@ -478,10 +478,10 @@ func TestReplaceInFile_ExcludeWithUnicode(t *testing.T) {
 	filePath := createTestFile(t, tmpDir, "unicode.txt", content)
 
 	config := Config{
-		Search:  "test",
-		Replace: "exam",
-		Exclude: []string{"世界"},
-		DryRun:  false,
+		Search:       "test",
+		Replace:      "exam",
+		ExcludeLines: []string{"世界"},
+		DryRun:       false,
 	}
 
 	linesChanged, _, err := replaceInFile(filePath, config)

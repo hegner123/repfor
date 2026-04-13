@@ -44,7 +44,8 @@ Optional flags:
 - `--dir` - Comma-separated list of directories to search (defaults to current directory)
 - `--file` - Comma-separated list of files to process (takes precedence over `--dir`)
 - `--ext` - File extension filter (e.g., `.go`, `.txt`)
-- `--exclude` - Comma-separated list of strings to exclude from replacement
+- `--exclude-files` - Comma-separated filename patterns to skip (substring match against filename)
+- `--exclude-lines` - Comma-separated strings to exclude from matched lines
 - `--case-insensitive` - Case-insensitive search
 - `--whole-word` - Match whole words only
 - `--dry-run` - Preview changes without modifying files
@@ -74,7 +75,7 @@ The replacement flow:
 - **Multi-directory**: Processes multiple directories in one invocation
 - **File mode**: Target specific files by path (takes precedence over directory scanning)
 - **Multi-line support**: When search or replace contains `\n`, switches to whole-file processing
-- **Exclude filtering**: Skips replacement in lines containing any of the exclude patterns
+- **Exclude filtering**: Two levels of exclusion: file-level (skip entire files by filename pattern) and line-level (skip lines containing exclude patterns)
 - **Extension filtering**: Applied before file reading for efficiency
 - **In-place modification**: Files are modified directly (no backups)
 - **Dry-run mode**: Preview changes without modifying files
@@ -123,7 +124,8 @@ Key types:
   - `Search string` - String to search for
   - `Replace string` - String to replace with
   - `Ext string` - File extension filter
-  - `Exclude []string` - List of exclude patterns
+  - `ExcludeFiles []string` - Filename patterns to skip (substring match)
+  - `ExcludeLines []string` - Line content patterns to filter
   - `CaseInsensitive bool` - Case-insensitive search
   - `WholeWord bool` - Whole-word matching
   - `DryRun bool` - Whether to preview only

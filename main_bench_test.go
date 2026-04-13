@@ -334,10 +334,10 @@ func BenchmarkReplaceInFile_WithExclude(b *testing.B) {
 	filePath := createTestFileBench(b, tmpDir, "exclude.txt", content)
 
 	config := Config{
-		Search:  "result",
-		Replace: "res",
-		Exclude: []string{"dirResult"},
-		DryRun:  false,
+		Search:       "result",
+		Replace:      "res",
+		ExcludeLines: []string{"dirResult"},
+		DryRun:       false,
 	}
 
 	b.ResetTimer()
